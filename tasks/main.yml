@@ -1,0 +1,86 @@
+---
+# tasks file for mariadb
+- name: Include vars of stuff.yaml into the 'stuff' variable (2.2).
+  include_vars:
+    file: vault.yml
+
+- name: Ensure required packages are installed
+  yum:
+    name: "{{ required_packages }}"
+    state: present
+
+- name: Ensure mariadb yum repository exists
+  yum_repository:
+    name: "{{ mariadb_repo.name }}"
+    description: "{{ mariadb_repo.description }}"
+    baseurl: "{{ mariadb_repo.baseurl }}"
+    gpgkey: "{{ mariadb_repo.gpgkey }}"
+    gpgcheck: "{{ mariadb_repo.gpgcheck }}"
+  notify: yum clean
+
+- name: Ensure MariaDB packages are installed
+  yum:
+    name: "{{ mariadb_packages }}"
+    state: "{{ mariadb_package_state }}"
+
+# - name: Ensure /etc/my.cnf is up to date
+
+# See https://bugzilla.redhat.com/show_bug.cgi?id=754285
+# - name: Ensure limits are set
+- name: Ensure mariadb port is open
+  firewalld:
+    port: "{{ mariadb_port }}"
+    permanent: yes
+    state: enabled
+    immediate: yes
+
+- name: Ensure the mariadb service is setup
+  service:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: Copy mysql secure install script to host
+  template:
+    src: mysql_secure.sql.j2
+    dest: /home/vagrant/mysql_secure.sql
+
+- name: Ensure mysql_secure_installation instance has been secured
+  shell: mysql -u root --port {{ mariadb_port | replace('/tcp', '') }} < /home/vagrant/mysql_secure.sql && touch mysql_secure.success
+  args:
+    creates: mysql_secure.success
+
+# - name: Ensure mysql_secure_installation has be run (still needed for 10.3?)
+- name: Create databases
+  mysql_db:
+    name: "{{ item }}"
+    state: present
+    login_user: "root"
+    login_password: "{{ super_secret_vault_password }}"
+    login_port: "{{ mariadb_port | replace('/tcp', '') }}"
+  with_items:
+    - "{{ databases }}"
+
+- name: Create read-only users
+  mysql_user:
+    name: "ro_{{ item }}"
+    password: "{{ secret_ro }}"
+    priv:  "{{ item }}.*:SELECT"
+    state: "present"
+    login_user: "root"
+    login_password: "{{ super_secret_vault_password }}"
+    login_port: "{{ mariadb_port | replace('/tcp', '') }}"
+  with_items:
+    - "{{ databases }}"
+
+- name: Create read-write users
+  mysql_user:
+    name: "rw_{{ item }}"
+    password: "{{ secret_rw }}"
+    priv:  "{{ item }}.*:SELECT"
+    state: "present"
+    login_user: "root"
+    login_password: "{{ super_secret_vault_password }}"
+    login_port: "{{ mariadb_port | replace('/tcp', '') }}"
+  with_items:
+    - "{{ databases }}"
