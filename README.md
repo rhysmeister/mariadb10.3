@@ -22,4 +22,4 @@ secret_rw:  MariaDB user read-write password
 Author Information
 ------------------
 
-Rhys Campbell <rhys.james.campbell@googlemail.com> http://github.com/rhysmeister
+Rhys Campbell http://github.com/rhysmeister
